@@ -1019,6 +1019,8 @@ pub enum CanasError {
     BadSplit,
     #[msg("dispute window must be non-negative")]
     BadWindow,
+    #[msg("new jobs are paused")]
+    Paused,
     #[msg("mint not set yet")]
     MintNotSet,
     #[msg("wrong mint")]
