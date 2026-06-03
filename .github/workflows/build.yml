@@ -51,7 +51,17 @@ jobs:
           grep -A1 'name = "solana-program"' Cargo.lock | head -4 || true
 
       - name: Verifiable build (Rust 1.85 image — fixes edition2024)
-        run: solana-verify build --library-name canas --base-image solanafoundation/solana-verifiable-build:3.1.14
+        run: |
+          set -o pipefail
+          solana-verify build --library-name canas --base-image solanafoundation/solana-verifiable-build:3.1.14 2>&1 | tee build.log
+
+      - name: Publish build log (always, for diagnostics)
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: buildlog
+          name: Build log
+          files: build.log
 
       - name: Locate built .so + executable hash
         run: |
