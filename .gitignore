@@ -8,3 +8,5 @@ node_modules
 keys/
 *-keypair.json
 id.json
+build.log
+*.so

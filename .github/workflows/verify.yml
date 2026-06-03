@@ -27,9 +27,9 @@ permissions:
   contents: write # allow committing the pinned Cargo.lock back
 
 env:
-  PROGRAM_ID: REPLACE_WITH_DEPLOYED_PROGRAM_ID
-  REPO_URL: https://github.com/REPLACE_WITH/canas-program
-  UPLOADER: REPLACE_WITH_UPGRADE_AUTHORITY_PUBKEY
+  PROGRAM_ID: 8e23bCyweHUVuiS3zhbhibuad5h6mXjwftTzPTjBomDq
+  REPO_URL: https://github.com/hypecreator1/canas-program
+  UPLOADER: 5FAsiwmkyxvbikbQupU9tzSjFj5PYeMbnP358HpQhDjx
   LIB: canas
   IMAGE: solanafoundation/solana-verifiable-build:3.1.14
   RPC: https://api.mainnet-beta.solana.com
