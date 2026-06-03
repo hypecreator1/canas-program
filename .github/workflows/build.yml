@@ -1,0 +1,66 @@
+name: build-canas
+
+# Verifiable build on a Linux runner with the pinned image (Rust >= 1.85).
+#
+# This is a REPRODUCIBILITY build: it compiles the program with the same
+# verifiable-build image OtterSec uses, prints the executable hash, and uploads
+# the .so + the pinned Cargo.lock. Use it BEFORE spending any SOL:
+#   - first run (before deploy): grab canas.so to deploy, note the hash.
+#   - after deploy: compare this hash to the on-chain hash
+#       solana-verify get-program-hash <PROGRAM_ID>
+#     they must match before you run the verify workflow.
+#
+# The repo root IS the anchor project (Anchor.toml at root).
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (host, for cargo install)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.2.12/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install solana-verify
+        run: cargo install solana-verify --locked
+
+      - name: Show declare_id (must equal your program id before deploy)
+        run: |
+          echo "--- declare_id in source ---"; grep 'declare_id!' programs/canas/src/lib.rs
+          echo "--- Anchor.toml ---";          grep 'canas =' Anchor.toml
+
+      - name: Generate Cargo.lock (pin deps — pitfall #7)
+        run: |
+          cargo generate-lockfile
+          echo "--- key locked versions ---"
+          grep -A1 'name = "anchor-lang"' Cargo.lock | head -4 || true
+          grep -A1 'name = "anchor-spl"'  Cargo.lock | head -4 || true
+          grep -A1 'name = "solana-program"' Cargo.lock | head -4 || true
+
+      - name: Verifiable build (Rust 1.85 image — fixes edition2024)
+        run: solana-verify build --library-name canas --base-image solanafoundation/solana-verifiable-build:3.1.14
+
+      - name: Locate built .so + executable hash
+        run: |
+          test -f target/deploy/canas.so && echo "canas.so OK ($(stat -c%s target/deploy/canas.so) bytes)" \
+            || (echo "canas.so MISSING"; find . -name 'canas.so' -not -path '*/node_modules/*'; exit 1)
+          echo "built executable hash: $(solana-verify get-executable-hash target/deploy/canas.so)"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: canas-build
+          path: |
+            target/deploy/canas.so
+            Cargo.lock
+          if-no-files-found: error

@@ -1,0 +1,100 @@
+name: verify-canas
+
+# Submit the verified-build to OtterSec (-> Solscan "Verified" badge) WITHOUT
+# putting the upgrade-authority key in CI. Two manual steps (Actions -> Run workflow):
+#
+#   step = export  -> pins Cargo.lock, then prints a base58 transaction that
+#                     UPLOADS the verification PDA. Copy it and sign LOCALLY with
+#                     the upgrade authority (node ../verify-submit.mjs "<base58>").
+#                     The key never leaves your machine.
+#   step = submit  -> after the PDA is on-chain, triggers the OtterSec remote
+#                     rebuild + listing. No key needed.
+#
+# >>> FILL IN the env values below after you deploy (program id, repo url, the
+#     upgrade-authority pubkey). The PDA must be signed by the upgrade authority.
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "export = build PDA upload tx (sign locally) | submit = trigger OtterSec job"
+        required: true
+        default: export
+        type: choice
+        options: [export, submit]
+
+permissions:
+  contents: write # allow committing the pinned Cargo.lock back
+
+env:
+  PROGRAM_ID: REPLACE_WITH_DEPLOYED_PROGRAM_ID
+  REPO_URL: https://github.com/REPLACE_WITH/canas-program
+  UPLOADER: REPLACE_WITH_UPGRADE_AUTHORITY_PUBKEY
+  LIB: canas
+  IMAGE: solanafoundation/solana-verifiable-build:3.1.14
+  RPC: https://api.mainnet-beta.solana.com
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (host, for cargo install)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.2.12/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install solana-verify
+        run: cargo install solana-verify --locked
+
+      - name: Pin Cargo.lock
+        if: ${{ inputs.step == 'export' }}
+        run: |
+          cargo generate-lockfile
+          if [ -n "$(git status --porcelain Cargo.lock)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Cargo.lock
+            git commit -m "pin Cargo.lock for verifiable build [skip ci]"
+            git push
+            echo "Committed Cargo.lock"
+          else
+            echo "Cargo.lock already pinned / unchanged"
+          fi
+
+      - name: Resolve commit hash
+        id: c
+        run: echo "hash=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Export PDA upload transaction (sign locally with upgrade authority)
+        if: ${{ inputs.step == 'export' }}
+        run: |
+          echo "Verifying repo  : $REPO_URL"
+          echo "Commit          : ${{ steps.c.outputs.hash }}"
+          echo "Program id      : $PROGRAM_ID"
+          echo "Uploader (auth) : $UPLOADER"
+          echo "============ COPY THE base58 TX BELOW ============"
+          solana-verify export-pda-tx "$REPO_URL" \
+            --program-id "$PROGRAM_ID" \
+            --uploader "$UPLOADER" \
+            --library-name "$LIB" \
+            --base-image "$IMAGE" \
+            --commit-hash "${{ steps.c.outputs.hash }}" \
+            --url "$RPC" \
+            --encoding base58 \
+            --compute-unit-price 0
+          echo "=================================================="
+          echo "Then locally:  node verify-submit.mjs \"<base58 above>\""
+
+      - name: Submit remote verification job (no key needed)
+        if: ${{ inputs.step == 'submit' }}
+        run: |
+          solana-verify remote submit-job \
+            --program-id "$PROGRAM_ID" \
+            --uploader "$UPLOADER" \
+            --url "$RPC"
+          echo "Submitted. Check: https://verify.osec.io/status/$PROGRAM_ID"

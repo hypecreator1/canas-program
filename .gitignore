@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+.anchor
+test-ledger
+node_modules
+# NEVER commit keys
+*.json.key
+keys/
+*-keypair.json
+id.json
