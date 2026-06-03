@@ -17,6 +17,9 @@ on:
     branches: [main, master]
   workflow_dispatch: {}
 
+permissions:
+  contents: write # publish the built .so to a Release for easy download
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -64,3 +67,15 @@ jobs:
             target/deploy/canas.so
             Cargo.lock
           if-no-files-found: error
+
+      # Publish the built binary to a fixed-tag Release so it can be fetched from
+      # a stable public URL (no auth needed) for the local deploy:
+      #   https://github.com/<owner>/canas-program/releases/download/build/canas.so
+      - name: Publish .so to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build
+          name: Latest verifiable build
+          files: |
+            target/deploy/canas.so
+            Cargo.lock
