@@ -77,7 +77,6 @@ jobs:
           echo "Commit          : ${{ steps.c.outputs.hash }}"
           echo "Program id      : $PROGRAM_ID"
           echo "Uploader (auth) : $UPLOADER"
-          echo "============ COPY THE base58 TX BELOW ============"
           solana-verify export-pda-tx "$REPO_URL" \
             --program-id "$PROGRAM_ID" \
             --uploader "$UPLOADER" \
@@ -86,9 +85,17 @@ jobs:
             --commit-hash "${{ steps.c.outputs.hash }}" \
             --url "$RPC" \
             --encoding base58 \
-            --compute-unit-price 0
-          echo "=================================================="
-          echo "Then locally:  node verify-submit.mjs \"<base58 above>\""
+            --compute-unit-price 0 | tee pda-tx.txt
+          echo "============ base58 PDA tx (also published to Release tag pdatx) ============"
+          cat pda-tx.txt
+
+      - name: Publish PDA tx to Release (for local signing)
+        if: ${{ inputs.step == 'export' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pdatx
+          name: PDA upload tx (sign locally)
+          files: pda-tx.txt
 
       - name: Submit remote verification job (no key needed)
         if: ${{ inputs.step == 'submit' }}
